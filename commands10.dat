@@ -1,0 +1,21 @@
+./spl --os $HOME/myxos/stage10/os_startup.spl
+./spl --int=5 $HOME/myxos/stage10/int5.spl
+./spl --int=6 $HOME/myxos/stage10/int6.spl
+./spl --int=7 $HOME/myxos/stage10/int7.spl
+./spl --int=timer $HOME/myxos/stage10/timer.spl
+
+./apl $HOME/myxos/stage10/test_10.apl
+./apl $HOME/myxos/stage10/wait.apl
+./apl $HOME/myxos/stage10/signal.apl
+
+load --os $HOME/myxos/stage10/os_startup.xsm
+load --int=5 $HOME/myxos/stage10/int5.xsm
+load --int=6 $HOME/myxos/stage10/int6.xsm
+load --int=timer $HOME/myxos/stage10/timer.xsm
+load --exhandler $HOME/myxos/stage10/exhandler.xsm
+load --int=7 $HOME/myxos/stage10/int7.xsm
+
+load --init $HOME/myxos/stage10/test.xsm
+
+load --exec $HOME/myxos/stage9/odd.xsm
+load --exec $HOME/myxos/stage9/even.xsm

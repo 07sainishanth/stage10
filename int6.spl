@@ -1,0 +1,153 @@
+//physical address of SP
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+// Get system call no. from the stack and put it in a register
+alias syscallno S1;
+syscallno = [physicalSP - 1];
+
+alias currentPID S2;//CurrentPID
+currentPID = (PTBR - 1024)/8;
+
+//name of file to be loaded
+alias filename  S7;
+filename  = [physicalSP - 3];
+
+if ( syscallno == 9) then
+	//print(filename);
+	alias temp S3;
+	temp = 5 * 512;
+	alias FATindex S4;
+	FATindex = -1;
+	//------checking if any file exists with this name
+	while ( temp < 6*512 ) do
+		if (filename == [temp] )then
+			FATindex = (temp - 5*512)/8;// noting the fatindex of given file
+			break;
+		endif;
+		temp = temp + 8;
+	endwhile;
+	//------IF NO FILE EXITS  with given name returning with failure
+	if ( FATindex == -1 )then
+		[physicalSP - 2] = -1;			
+		ireturn;
+	endif;
+	//----loading basic block of file
+	load(1,[FATindex*8 + 5*512 +2]);
+	alias no_of_code_blocks S5;
+	no_of_code_blocks = 0;
+	//---caluclating total no_of_code_blocks
+	temp = 512;
+	while ( temp < 1024 ) do
+		if ([temp] == -1 )then
+			break;
+		endif;
+		no_of_code_blocks = no_of_code_blocks + 1;
+		temp = temp + 1;
+	endwhile;
+	//if there are no code blocks or more than 3 codeblocks return with -1
+	if (no_of_code_blocks > 3 || no_of_code_blocks < 1) then
+		[physicalSP - 2] = -1;	
+		//print("ERR54");
+		ireturn;
+	endif;
+	//--no_of_code_blocks in current process
+	alias code_blo_cur_pro S4;
+	code_blo_cur_pro = 0;
+	temp = 0;
+	if([PTBR+0] != -1) then
+		temp = temp+1;
+	endif;
+	if([PTBR+2] != -1) then
+		temp = temp+1;
+	endif;
+	if([PTBR+4] != -1) then
+		temp = temp+1;
+	endif;
+	code_blo_cur_pro = temp;
+	//--comparing code blocks of 2 processes
+	temp = 0;
+	if(code_blo_cur_pro == no_of_code_blocks) then//if equal no of blocks are available
+		while( code_blo_cur_pro > 0 ) do
+			code_blo_cur_pro = code_blo_cur_pro - 1;
+			load([PTBR + temp*2],[512 + temp]);
+			temp = temp + 1;
+		endwhile;
+	endif;
+	temp = 0;
+	if(code_blo_cur_pro < no_of_code_blocks) then//if insufficient no of blocks are available
+		while( code_blo_cur_pro > 0 ) do
+			code_blo_cur_pro = code_blo_cur_pro - 1;
+			no_of_code_blocks = no_of_code_blocks - 1;
+			load([PTBR + temp*2],[512 + temp]);
+			temp = temp+1;
+		endwhile;
+		code_blo_cur_pro = temp;
+		//checking wether enough no of process are available or not
+		temp = 0;
+		while ( temp < 64 && no_of_code_blocks > 0) do
+			if ( [1280 + temp] == 0 ) then
+				no_of_code_blocks = no_of_code_blocks -1;
+				[PTBR + code_blo_cur_pro*2 + 0] = [512 + code_blo_cur_pro];
+				[PTBR + code_blo_cur_pro*2 + 0] = "01";
+				load([PTBR + code_blo_cur_pro*2],[512 + code_blo_cur_pro]);
+				code_blo_cur_pro = code_blo_cur_pro + 1;
+			endif;
+			temp = temp + 1;	
+		endwhile;
+		//if sufficient no of pages are not available return with -1
+		if( no_of_code_blocks != 0) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+	endif;
+	temp = 0;
+	if(code_blo_cur_pro > no_of_code_blocks) then//if excess no of blocks are available
+		while( no_of_code_blocks > 0 ) do
+			code_blo_cur_pro = code_blo_cur_pro - 1;
+			no_of_code_blocks = no_of_code_blocks - 1;
+			load([PTBR + temp*2],[512 + temp]);
+			temp = temp + 1;
+		endwhile;
+		while( code_blo_cur_pro > 0 ) do
+			[PTBR + temp*2 + 0] = -1;
+			[PTBR + temp*2 + 1] = "00";
+			code_blo_cur_pro = code_blo_cur_pro - 1;
+		endwhile;
+	endif;
+	//closing all files in this process using close system call
+	temp = 0;
+	alias SWOFTindex S6;
+	SWOFTindex = 0;
+	while(temp < 8) do
+		if([1536 + currentPID * 32 + 15 + temp*2] != -1) then
+			SWOFTindex = [1536 + currentPID * 32 + 15 + temp*2];	
+			[FILE_TABLE + SWOFTindex*2 + 1] = [FILE_TABLE + SWOFTindex*2 + 1] - 1;
+			if ( [FILE_TABLE + SWOFTindex*2 + 1] == 0 ) then
+				[FILE_TABLE + SWOFTindex*2 + 0] = -1;
+			endif;
+			[1536 + currentPID * 32 + 15 + temp*2] = -1;
+			[1536 + currentPID * 32 + 15 + temp*2 + 1] = -1;
+			[physicalSP -2] = 0;
+			ireturn;
+		endif;
+		temp = temp + 1;
+	endwhile;
+	//setting stackpointer 
+	SP = 3 * 512;// points to start of logical page 3
+	//top of the stack is set to 0
+	[ [PTBR + 2 * (SP / 512)] * 512 ] = 0;// sets instruction pointer(IP) to INIT
+	//print("exec");
+	ireturn;
+endif;
+if ( syscallno == 11) then
+	//print("PID-in");
+	[physicalSP - 2] = currentPID;
+	ireturn;
+endif;
+if ( syscallno == 12) then
+	//print("PPID-in");
+	[physicalSP - 2] = [ READY_LIST + currentPID*32 +31];
+	ireturn;
+endif;
+ireturn;

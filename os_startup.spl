@@ -1,0 +1,90 @@
+load(5,19);//loading FAT
+load(6,20);//loading DFS
+
+load(7,1);// loading exception handler from disk blocks 1 , 2 to pages 7 , 8
+load(8,2);
+
+load(9,3);//loading timer interrupt
+load(10,4);
+
+load(11,5);//loading int1
+load(12,6);
+
+load(13,7);//loading int2
+load(14,8);
+
+load(15,9);//loading int3
+load(16,10);
+
+load(17,11);//loading int4
+load(18,12);
+
+load(19,13);//loading int5
+load(20,14);
+
+load(21,15);//loading int6
+load(22,16);
+
+load(23,17);//loading int7
+load(24,18);
+
+[1536 + 0] = 0;//sets process identifier (PID) to 0
+
+load(25,21); //loading INIT code from disk to memory
+load(26,22);
+load(27,23);
+
+PTBR = 1024;//Page Table Base Register
+PTLR = 4;//Page Table Length Register
+
+[PTBR + 0] = 25; //Physical page number of logical page 0
+[PTBR + 1] = "01";// reference bit 0 , valid bit 1 : 
+[PTBR + 2] = 26;
+[PTBR + 3] = "01";
+[PTBR + 4] = 27;
+[PTBR + 5] = "01";
+[PTBR + 6] = 28;
+[PTBR + 7] = "01";
+
+[1536 + 1] = 2;//for process state running
+
+SP = 3 * 512;// points to start of logical page 3
+
+[ 28 * 512 ] = 0;// sets instruction pointer(IP) to INIT
+
+alias counter S0;			
+counter = 0;
+while ( counter <  128) do			// 64 entries, each of size 2 words
+	[ FILE_TABLE + counter + 0] = -1;	// Set FAT Index to -1
+	[ FILE_TABLE + counter + 1] =  0;	// Set File Open Count to 0
+	counter = counter + 2;			// Move to next entry
+endwhile;	
+
+//per-process open file table
+counter = 0;
+while ( counter < 16) do
+	[READY_LIST + 15 + counter + 0] = -1;
+	[READY_LIST + 15 + counter + 1] = -1; 	
+	counter = counter + 2;	
+endwhile;
+counter = 0;
+//intialising the memory free list
+//0 to 24 reserved for OS
+//25 to 28 reserved for init
+//29 to 63 unused
+while ( counter < 64) do
+	if ( counter < 29 ) then
+		[1280 + counter] = 1;
+	else
+		[1280 + counter] = 0;
+	endif;
+	counter = counter + 1;	
+endwhile;
+//intialising State to '0' in all PCBs
+counter = 1;
+while ( counter < 32) do
+	[READY_LIST + counter*32 + 1] = 0;
+	counter = counter + 1;	
+endwhile;
+[1536 + 31] = 0;//making parent process of init to 0
+ireturn;

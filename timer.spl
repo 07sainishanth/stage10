@@ -1,0 +1,82 @@
+alias currentPID S0;
+currentPID = (PTBR - 1024)/8;// Caluclating PID of current process
+breakpoint; 
+alias currentPCB S1;
+currentPCB = 1536 + currentPID *32; // locating PCB of current process
+[currentPCB + 1 ] = 1;// State set to Ready .
+
+[ currentPCB + 2 ] = BP;
+[ currentPCB + 3 ] = SP-1;
+
+alias physicalSP S2;
+physicalSP = [PTBR + 0] * 512 + SP;  
+
+[ currentPCB + 4 ] = [ physicalSP ];// saving current process IP in  PCB
+
+[ currentPCB + 5 ] = PTBR;
+[ currentPCB + 6 ] = PTLR ;
+
+[ currentPCB + 7 ] = R0;
+[ currentPCB + 8 ] = R1;
+[ currentPCB + 9 ] = R2;
+[ currentPCB + 10 ] = R3;
+[ currentPCB + 11 ] = R4;
+[ currentPCB + 12 ] = R5;
+[ currentPCB + 13 ] = R6;
+[ currentPCB + 14 ] = R7;
+
+alias newPID S3;
+alias newPCB S4;
+
+//finding process
+alias temp S7;
+temp = 1;
+newPID = -1;
+//---Checking for a ready process
+while ( temp < 33) do	
+	if( [READY_LIST + ((temp+currentPID)%32)*32 + 1] == 1) then
+		newPID = (temp+currentPID)%32;//noting the PID of ready process
+		print("timer");
+		print(newPID);
+		break;
+	endif;
+	temp = temp + 1;	
+endwhile;	
+//---if no free PCB found return back with -1
+if( newPID == -1) then
+	halt;
+endif;
+breakpoint;
+//Loading newprocess values from PCB to machine
+//print("timer-p2");
+
+newPCB = 1536 + newPID * 32;
+[newPCB + 0] = newPID;
+
+[ newPCB + 1 ] = 2;//setting STATE to running
+
+BP = [newPCB + 2];
+SP = [newPCB + 3]+1;
+
+PTBR = [newPCB + 5];
+PTLR = [newPCB + 6];
+
+R0 = [newPCB + 7];
+R1 = [newPCB + 8];
+R2 = [newPCB + 9];
+R3 = [newPCB + 10];
+R4 = [newPCB + 11];
+R5 = [newPCB + 12];
+R6 = [newPCB + 13];
+R7 = [newPCB + 14];
+
+//SP = SP+1;
+
+alias newphysicalSP S5;
+newphysicalSP = [PTBR + 0] * 512 + SP;
+//newphysicalSP = ([PTBR + 2*(SP/512)]*512) + (SP%512);
+[newphysicalSP] = [ newPCB + 4];
+
+breakpoint;
+//print("5-EOF");
+ireturn;

@@ -1,0 +1,151 @@
+//physical address of SP
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+// Get system call no. from the stack and put it in a register
+alias syscallno S1;
+syscallno = [physicalSP - 1];
+
+alias currentPID S2;//CurrentPID
+currentPID = (PTBR - 1024)/8;
+
+//print("exit");
+
+if ( syscallno == 10) then
+	alias temp S3;
+	temp = 0;
+	//---Checking for a waiting process with this process ID process
+	while ( temp < 32) do	
+		if( [READY_LIST + ((temp+currentPID)%32)*32 + 1] == (100 + currentPID)) then
+			[READY_LIST + ((temp+currentPID)%32)*32 + 1] = 1;//setting the state to ready
+		endif;
+		temp = temp + 1;	
+	endwhile;
+	//closing all files in this process using close system call
+	temp = 0;
+	alias SWOFTindex S6;
+	SWOFTindex = 0;
+	while(temp < 8) do
+		if([1536 + currentPID * 32 + 15 + temp*2] != -1) then
+			SWOFTindex = [1536 + currentPID * 32 + 15 + temp*2];	
+			[FILE_TABLE + SWOFTindex*2 + 1] = [FILE_TABLE + SWOFTindex*2 + 1] - 1;
+			if ( [FILE_TABLE + SWOFTindex*2 + 1] == 0 ) then
+				[FILE_TABLE + SWOFTindex*2 + 0] = -1;
+			endif;
+			[1536 + currentPID * 32 + 15 + temp*2] = -1;
+			[1536 + currentPID * 32 + 15 + temp*2 + 1] = -1;
+			[physicalSP -2] = 0;
+			ireturn;
+		endif;
+		temp = temp + 1;
+	endwhile;
+	//setting the state of this PCB to 0 i.e terminated
+	[READY_LIST + currentPID*32 + 1] = 0;
+	//freeing memory pages of this process
+	temp = 0;
+	while (temp < 4)do
+		if([PTBR + temp*2] != -1) then
+			[1280 + [PTBR + temp*2]] = 0;
+		endif;
+		[PTBR + temp*2 + 0] = -1;
+		[PTBR + temp*2 + 1] = "00";
+		temp = temp + 1;
+	endwhile;
+	print("JMP-ins");
+	temp = 1;
+	alias newPID S4;
+	newPID = -1;
+	//---Checking for a ready process
+	while ( temp < 33) do	
+		if( [READY_LIST + ((temp+currentPID)%32)*32 + 1] == 1) then
+			newPID = (temp+currentPID)%32;//noting the PID of ready process
+			print("exit-new");
+			print(newPID);
+			break;
+		endif;
+		temp = temp + 1;	
+	endwhile;	
+	//---if no free PCB found return back with -1
+	if( newPID == -1) then
+		//print("exit-1");
+		halt;
+	endif;
+	
+	//scheduling next ready process to run
+	[ READY_LIST + newPID * 32 + 1 ] = 2;//setting STATE to running
+
+	BP = [READY_LIST + newPID * 32 + 2];
+	SP = [READY_LIST + newPID * 32 + 3]+1;
+
+	PTBR = [READY_LIST + newPID * 32 + 5];
+	PTLR = [READY_LIST + newPID * 32 + 6];
+
+	R0 = [READY_LIST + newPID * 32 + 7];
+	R1 = [READY_LIST + newPID * 32 + 8];
+	R2 = [READY_LIST + newPID * 32 + 9];
+	R3 = [READY_LIST + newPID * 32 + 10];
+	R4 = [READY_LIST + newPID * 32 + 11];
+	R5 = [READY_LIST + newPID * 32 + 12];
+	R6 = [READY_LIST + newPID * 32 + 13];
+	R7 = [READY_LIST + newPID * 32 + 14];
+	//SP = SP+1;
+	print("hello-");
+	alias newphysicalSP S5;
+	newphysicalSP = [PTBR + 0] * 512 + SP;
+	//newphysicalSP = ([PTBR + 2*(SP/512)]*512) + (SP%512);
+	[newphysicalSP] = [ READY_LIST + newPID * 32 + 4];
+	print( READY_LIST + newPID * 32);
+breakpoint;
+ireturn;
+endif;
+if ( syscallno == 13) then
+	alias PID S3;
+	PID = [physicalSP - 3]; 
+	print("wait");
+	if ([READY_LIST + PID * 32 + 0] == currentPID || [READY_LIST + PID * 32 + 1] == 0)then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	[READY_LIST + currentPID * 32 + 1] = 100 + PID;
+	alias temp S3;
+	alias currentPCB S4;
+	currentPCB = 1536 + currentPID *32; // locating PCB of current process
+	[currentPCB + 1 ] = 1;// State set to Ready .
+
+	[ currentPCB + 2 ] = BP;
+	[ currentPCB + 3 ] = SP-1;
+ 
+
+	[ currentPCB + 4 ] = [ physicalSP ];// saving current process IP in  PCB
+
+	[ currentPCB + 5 ] = PTBR;
+	[ currentPCB + 6 ] = PTLR ;
+
+	[ currentPCB + 7 ] = R0;
+	[ currentPCB + 8 ] = R1;
+	[ currentPCB + 9 ] = R2;
+	[ currentPCB + 10 ] = R3;
+	[ currentPCB + 11 ] = R4;
+	[ currentPCB + 12 ] = R5;
+	[ currentPCB + 13 ] = R6;
+	[ currentPCB + 14 ] = R7;
+	inline "JMP 12126";
+	ireturn;
+endif;
+if ( syscallno == 14) then
+	alias temp S3;
+	temp = 0;
+	//---Checking for a waiting process with this process ID process
+	while ( temp < 32) do
+		alias temp2 S4;
+		temp2 = READY_LIST + ((temp+currentPID)%32)*32 + 1;
+		if( [temp2] == (100 + currentPID)) then
+			print("signal-p");
+			[temp2] = 1;//setting the state to ready
+		endif;
+		temp = temp + 1;	
+	endwhile;
+	[physicalSP - 2] = 0;
+	ireturn;
+endif;
+ireturn;
